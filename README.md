@@ -1,6 +1,6 @@
 # Autoaimagix Notes API
 
-A small Express 4 REST API with JWT authentication, PostgreSQL notes, owner/admin authorization, and authenticated OpenWeatherMap access. Requires Node.js 20+.
+A small Express 4 REST API with JWT authentication, PostgreSQL notes, owner/admin authorization, and authenticated Open-Meteo access. Requires Node.js 20+.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ npm run test:db
 npm run dev
 ```
 
-`setup:local` creates `.env` with random database, JWT, and admin credentials and restrictive file permissions. It preserves any existing `.env`. Set `OPENWEATHER_API_KEY` in that file before using weather. Find the generated admin email/password in `.env`; never commit or share this file.
+`setup:local` creates `.env` with random database, JWT, and admin credentials and restrictive file permissions. It preserves any existing `.env`. Find the generated admin email/password in `.env`; never commit or share this file.
 
 PostgreSQL listens only on `127.0.0.1:5433` and persists data in a named Docker volume. `npm run db:down` stops the database without deleting its data. If you already run native PostgreSQL, create an empty database and set `DATABASE_URL` in `.env` instead; Docker is optional in that case. Keep `LOCAL_POSTGRES_PASSWORD` consistent with the URL when using Compose. Changing it later does not reset the password in an existing volume.
 
@@ -53,7 +53,6 @@ The database smoke script runs real API requests against Prisma and PostgreSQL, 
 | LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API            |
 | JWT_SECRET               | Random secret of at least 32 characters                         |
 | JWT_EXPIRES_IN           | Must be `1h`                                                    |
-| OPENWEATHER_API_KEY      | OpenWeatherMap API key                                          |
 | CORS_ORIGINS             | Comma-separated exact HTTP(S) origins, without trailing slashes |
 | UPSTASH_REDIS_REST_URL   | HTTPS Redis REST URL; required in production                    |
 | UPSTASH_REDIS_REST_TOKEN | Redis REST token; required with the URL                         |
@@ -64,11 +63,11 @@ Admin seed variables are only necessary for the seed command. Do not keep them i
 
 ## Vercel deployment
 
-Current account limitation: the `iti1` team has reached its 200-project Hobby limit, so creating/linking a new Vercel project was blocked. The Neon resource exists independently; no API deployment was created.
+The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Complete the Upstash marketplace terms before deploying. Weather uses the public Open-Meteo API and requires no API key.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
 2. Create an Upstash Redis database and copy its REST URL/token.
-3. Get your OpenWeatherMap key.
+3. Weather uses Open-Meteo, so no weather API key is needed.
 4. Install the Vercel CLI and run `vercel link` from this directory. Choose the intended account and project. Use the Other framework preset, `npm run build`, and no static output directory.
 5. Add the runtime environment variables from the table in the Vercel dashboard for each intended environment. Set `NODE_ENV=production`, use a newly generated JWT secret, and configure the actual client CORS origins. Upstash is mandatory in production.
 6. In a trusted local shell, configure `.env` to point at the production database and provide the admin seed credentials. Run `npx prisma db push` and `npm run db:seed` **against that production database**. Do not paste secrets into command-line arguments or commit them.
@@ -129,12 +128,12 @@ Statuses: 400 validation/malformed JSON, 401 missing/invalid authentication or c
 - **Mass assignment:** strict Zod schemas reject unexpected fields. Registration's explicitly permitted `role` field is discarded before the service is called; all registrations persist `USER`. All other unknown fields, including `id` and `ownerId`, are rejected. The authenticated identity controls ownership.
 - **Login limiting:** five attempts per 15-minute fixed window per IP, including failed validation. Upstash shares state across serverless instances; production fails startup without it and fails closed on store failure/timeout. Local development and tests use express-rate-limit memory storage. Responses include `RateLimit-*`, and 429 includes `Retry-After`. Shared fixed windows are aligned to Upstash's clock, so bursts can straddle a window boundary.
 - **Proxy:** `trust proxy=1` assumes exactly one trusted reverse proxy, as requested for Vercel. Restrict direct access to a self-hosted backend and adjust proxy trust to its topology before using this setting elsewhere.
-- **Weather:** fixed HTTPS upstream, encoded city, five-second abort timeout, validated response and allowlisted output fields. Upstream errors and API keys never reach responses.
+- **Weather:** fixed HTTPS upstream, encoded city, five-second abort timeout, validated response and allowlisted output fields. Upstream errors never reach responses. City lookup and forecast share one five-second deadline. Weather data is provided by [Open-Meteo](https://open-meteo.com/) using its [geocoding](https://open-meteo.com/en/docs/geocoding-api) and [forecast APIs](https://open-meteo.com/en/docs). The public service is for non-commercial use; use a suitable commercial plan before commercial reuse.
 - **HTTP:** Helmet, exact CORS allowlist, no-store responses, 10kb JSON limit, and central error serialization. CORS permits requests without an Origin header; authentication remains necessary. CORS is a browser policy, not access control.
 
 ## Verification
 
-Verified locally: 18 tests pass, ESLint and formatting pass, Prisma Client generation succeeds, and the installation audit reports zero vulnerabilities. Tests ran on Node 22.23.1.
+Verified locally: 19 tests pass, ESLint and formatting pass, Prisma Client generation succeeds, and the installation audit reports zero vulnerabilities. Tests ran on Node 22.23.1.
 
 Prisma CLI/client are pinned together at 6.12.0 to retain the requested schema configuration without the dependency advisory affecting later Prisma 6 CLI releases. Zod and Vitest use patched versions. `.npmrc` disables automatic peer installation to avoid an npm 10 resolver crash involving optional browser tooling; Vite is explicitly declared for the test runner.
 
@@ -145,11 +144,12 @@ npm run build
 npm run format:check
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Vercel/Upstash and weather connectivity still require configured services and deployment smoke tests.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Open-Meteo connectivity was verified for Cairo. Vercel/Upstash still require deployment smoke tests.
 
 ## Assumptions
 
 - The pasted specification controls implementation; the attached assessment document is background, not an instruction to publish or fill in personal claims.
+- Open-Meteo replaces OpenWeatherMap at the user's request; the external weather endpoint remains authenticated, with the same output fields.
 - Registration ignores `role` as explicitly required, despite the general strict unknown-field rule.
 - Production must use Upstash; memory fallback is for local development/tests only.
 - Admins can update/delete any note. Existing roles are managed through the seed or trusted database administration.
