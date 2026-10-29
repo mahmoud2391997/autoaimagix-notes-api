@@ -1,0 +1,44 @@
+{
+  "name": "autoaimagix-notes-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "prisma generate",
+    "postinstall": "prisma generate",
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "vitest run",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@prisma/client": "6.12.0",
+    "@upstash/ratelimit": "^2.0.0",
+    "@upstash/redis": "^1.35.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "prettier": "^3.6.2",
+    "prisma": "6.12.0",
+    "supertest": "^7.1.4",
+    "vite": "^6.3.6",
+    "vitest": "4.1.12"
+  }
+}
