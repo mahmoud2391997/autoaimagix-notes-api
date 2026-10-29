@@ -1,13 +1,16 @@
 import { rateLimit } from 'express-rate-limit';
 import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { createRateLimitRedis } from '../lib/rateLimitRedis.js';
 import { env } from '../config/env.js';
 import { AppError, asyncHandler } from '../utils/AppError.js';
 const shared = env.UPSTASH_REDIS_REST_URL
   ? new Ratelimit({
-      redis: new Redis({
+      redis: createRateLimitRedis({
         url: env.UPSTASH_REDIS_REST_URL,
         token: env.UPSTASH_REDIS_REST_TOKEN,
+        localCompatibility:
+          env.NODE_ENV !== 'production' &&
+          new URL(env.UPSTASH_REDIS_REST_URL).protocol === 'http:',
       }),
       limiter: Ratelimit.fixedWindow(5, '15 m'),
       prefix: 'notes:login',

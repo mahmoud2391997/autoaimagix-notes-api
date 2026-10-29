@@ -33,7 +33,7 @@ const schema = z
           )
           .min(1),
       ),
-    UPSTASH_REDIS_REST_URL: optional(z.string().url().startsWith('https://')),
+    UPSTASH_REDIS_REST_URL: optional(z.string().url()),
     UPSTASH_REDIS_REST_TOKEN: optional(z.string().min(1)),
     ADMIN_EMAIL: optional(
       z
@@ -46,6 +46,21 @@ const schema = z
     ),
   })
   .superRefine((v, ctx) => {
+    if (v.UPSTASH_REDIS_REST_URL) {
+      const url = new URL(v.UPSTASH_REDIS_REST_URL);
+      const localHttp =
+        v.NODE_ENV !== 'production' &&
+        url.protocol === 'http:' &&
+        ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+      if (url.protocol !== 'https:' && !localHttp)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['UPSTASH_REDIS_REST_URL'],
+          message:
+            'Redis REST requires HTTPS, except loopback HTTP outside production',
+        });
+    }
+
     if (
       Boolean(v.UPSTASH_REDIS_REST_URL) !== Boolean(v.UPSTASH_REDIS_REST_TOKEN)
     )

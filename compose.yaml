@@ -15,5 +15,29 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+  redis-rest:
+    image: hiett/serverless-redis-http@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150
+    restart: unless-stopped
+    environment:
+      SRH_MODE: env
+      SRH_TOKEN: ${LOCAL_REDIS_TOKEN:?Run npm run setup:local first}
+      SRH_CONNECTION_STRING: redis://redis:6379
+    ports:
+      - '127.0.0.1:8079:80'
+    depends_on:
+      redis:
+        condition: service_healthy
 volumes:
+  redis_data:
   postgres_data:

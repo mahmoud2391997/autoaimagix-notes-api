@@ -9,6 +9,7 @@ const emails = [
   `smoke-b-${suffix}@example.com`,
 ];
 const password = `Smoke1-${randomUUID()}`;
+const clientIp = `2001:db8:${randomUUID().replaceAll('-', '').slice(0, 24).match(/.{4}/g).join(':')}`;
 const auth = (method, path, token) =>
   request(app)[method](path).set('Authorization', `Bearer ${token}`);
 try {
@@ -23,6 +24,7 @@ try {
   const [a, b] = accounts;
   const login = await request(app)
     .post('/api/auth/login')
+    .set('X-Forwarded-For', clientIp)
     .send({ email: emails[0], password });
   assert.equal(login.status, 200);
   assert.equal(

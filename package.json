@@ -23,7 +23,8 @@
     "test:db": "node scripts/smoke-db.js",
     "db:push:neon": "node scripts/push-neon.js",
     "test:db:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config scripts/smoke-db.js",
-    "db:seed:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config prisma/seed.js"
+    "db:seed:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config prisma/seed.js",
+    "test:local": "node scripts/smoke-local.js"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",
