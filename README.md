@@ -63,6 +63,8 @@ Admin seed variables are only necessary for the seed command. Do not keep them i
 
 ## Vercel deployment
 
+Live API: [autoaimagix-notes-api.vercel.app](https://autoaimagix-notes-api.vercel.app/api/health). Production smoke tests passed for authentication, owner/admin note access, expired tokens, shared Redis rate limits, and live Cairo weather. Temporary test accounts were removed.
+
 The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Upstash Redis is provisioned on the free plan with paid auto-upgrades disabled. Vercel Marketplace injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`; environment validation accepts these as aliases for the corresponding `UPSTASH_REDIS_REST_*` settings. Weather uses the public Open-Meteo API and requires no API key.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
@@ -144,7 +146,7 @@ npm run build
 npm run format:check
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Open-Meteo connectivity was verified for Cairo. Vercel/Upstash still require deployment smoke tests.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Open-Meteo connectivity was verified for Cairo. Production Vercel/Upstash smoke tests passed, including distributed login limiting and live weather.
 
 ## Assumptions
 
