@@ -22,3 +22,13 @@ it('rejects partial Redis configuration', async () => {
     'Both Upstash variables',
   );
 });
+
+it('accepts Vercel Marketplace Redis aliases in production', async () => {
+  vi.resetModules();
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('KV_REST_API_URL', 'https://redis.example.com');
+  vi.stubEnv('KV_REST_API_TOKEN', 'test-integration-token');
+  const { env } = await import('../src/config/env.js');
+  expect(env.UPSTASH_REDIS_REST_URL).toBe('https://redis.example.com');
+  expect(env.UPSTASH_REDIS_REST_TOKEN).toBe('test-integration-token');
+});

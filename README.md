@@ -63,7 +63,7 @@ Admin seed variables are only necessary for the seed command. Do not keep them i
 
 ## Vercel deployment
 
-The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Complete the Upstash marketplace terms before deploying. Weather uses the public Open-Meteo API and requires no API key.
+The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Upstash Redis is provisioned on the free plan with paid auto-upgrades disabled. Vercel Marketplace injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`; environment validation accepts these as aliases for the corresponding `UPSTASH_REDIS_REST_*` settings. Weather uses the public Open-Meteo API and requires no API key.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
 2. Create an Upstash Redis database and copy its REST URL/token.
@@ -133,7 +133,7 @@ Statuses: 400 validation/malformed JSON, 401 missing/invalid authentication or c
 
 ## Verification
 
-Verified locally: 19 tests pass, ESLint and formatting pass, Prisma Client generation succeeds, and the installation audit reports zero vulnerabilities. Tests ran on Node 22.23.1.
+Verified locally: 20 tests pass, ESLint and formatting pass, Prisma Client generation succeeds, and the installation audit reports zero vulnerabilities. Tests ran on Node 22.23.1.
 
 Prisma CLI/client are pinned together at 6.12.0 to retain the requested schema configuration without the dependency advisory affecting later Prisma 6 CLI releases. Zod and Vitest use patched versions. `.npmrc` disables automatic peer installation to avoid an npm 10 resolver crash involving optional browser tooling; Vite is explicitly declared for the test runner.
 

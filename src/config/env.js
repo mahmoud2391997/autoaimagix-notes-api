@@ -61,7 +61,13 @@ const schema = z
         message: 'Production requires a shared Upstash rate-limit store',
       });
   });
-const result = schema.safeParse(process.env);
+const result = schema.safeParse({
+  ...process.env,
+  UPSTASH_REDIS_REST_URL:
+    process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
+  UPSTASH_REDIS_REST_TOKEN:
+    process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
+});
 if (!result.success)
   throw new Error(
     `Invalid environment: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
