@@ -8,20 +8,36 @@ A small Express 4 REST API with JWT authentication, PostgreSQL notes, owner/admi
 
 ## Local setup
 
-1. Create a Neon PostgreSQL database and copy its **pooled** connection URL.
-2. Get an OpenWeatherMap API key.
-3. Copy `.env.example` to `.env` and configure the database, weather key, CORS origins, and JWT secret. Generate a secret using `openssl rand -hex 32`. Never commit `.env`.
-4. Run:
+Local development uses PostgreSQL 17 through Docker, independently of the remote Neon database. Install and start Docker Desktop, then run:
 
 ```sh
 npm ci
+npm run setup:local
+npm run db:up
 npm run db:push
-# Configure ADMIN_EMAIL and ADMIN_PASSWORD first; this creates or resets that admin.
 npm run db:seed
+npm run test:db
 npm run dev
 ```
 
+`setup:local` creates `.env` with random database, JWT, and admin credentials and restrictive file permissions. It preserves any existing `.env`. Set `OPENWEATHER_API_KEY` in that file before using weather. Find the generated admin email/password in `.env`; never commit or share this file.
+
+PostgreSQL listens only on `127.0.0.1:5433` and persists data in a named Docker volume. `npm run db:down` stops the database without deleting its data. If you already run native PostgreSQL, create an empty database and set `DATABASE_URL` in `.env` instead; Docker is optional in that case. Keep `LOCAL_POSTGRES_PASSWORD` consistent with the URL when using Compose. Changing it later does not reset the password in an existing volume.
+
 The API listens on port 3000 by default. Health checks do not verify database connectivity. `db:push` is suitable for this assessment; review schema changes carefully before applying them to a database with existing data.
+
+## Remote Neon database
+
+The dedicated `autoaimagix-notes-api` Neon resource has been provisioned on the free plan in Frankfurt. Completing Neon account email verification is required to retrieve its connection settings through the console. The schema and remote smoke test have not yet been run.
+
+Use a separate ignored `.env.neon` file for remote operations. Copy `.env.example` into it, replace `DATABASE_URL` with Neon's **pooled** URL with `sslmode=require`, and generate independent JWT/admin secrets. Local Docker credentials do not belong in Neon or Vercel. Keep `NODE_ENV=development` in this administrative smoke-test file unless you also configure Upstash; the deployed API requires `NODE_ENV=production`.
+
+```sh
+npm run db:push:neon
+npm run test:db:neon
+```
+
+The database smoke script runs real API requests against Prisma and PostgreSQL, checks authentication and owner/admin CRUD, and removes only the temporary accounts it creates (with cascading note deletion). Run it against the dedicated assessment database, not a database with unrelated production workloads.
 
 ## Environment variables
 
@@ -29,7 +45,8 @@ The API listens on port 3000 by default. Health checks do not verify database co
 | ------------------------ | --------------------------------------------------------------- |
 | NODE_ENV                 | development, test, or production                                |
 | PORT                     | Local port; default 3000                                        |
-| DATABASE_URL             | Neon pooled PostgreSQL URL with TLS                             |
+| DATABASE_URL             | Local PostgreSQL URL or Neon pooled PostgreSQL URL with TLS     |
+| LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API            |
 | JWT_SECRET               | Random secret of at least 32 characters                         |
 | JWT_EXPIRES_IN           | Must be `1h`                                                    |
 | OPENWEATHER_API_KEY      | OpenWeatherMap API key                                          |
@@ -42,6 +59,8 @@ The API listens on port 3000 by default. Health checks do not verify database co
 Admin seed variables are only necessary for the seed command. Do not keep them in the Vercel runtime after seeding unless needed. Re-running the seed resets the configured account password and promotes it to admin.
 
 ## Vercel deployment
+
+Current account limitation: the `iti1` team has reached its 200-project Hobby limit, so creating/linking a new Vercel project was blocked. The Neon resource exists independently; no API deployment was created.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
 2. Create an Upstash Redis database and copy its REST URL/token.
@@ -122,7 +141,7 @@ npm run build
 npm run format:check
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. These tests do not prove PostgreSQL or live Vercel/Upstash connectivity; run deployed smoke tests with configured services before submission.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17. Live Vercel/Upstash and weather connectivity still require configured services and deployment smoke tests.
 
 ## Assumptions
 
@@ -130,7 +149,7 @@ Tests use Supertest against the actual Express middleware/routes/services with a
 - Registration ignores `role` as explicitly required, despite the general strict unknown-field rule.
 - Production must use Upstash; memory fallback is for local development/tests only.
 - Admins can update/delete any note. Existing roles are managed through the seed or trusted database administration.
-- No GitHub repository, live database or deployment is created without configured targets and credentials. The original assessment's personal delivery report remains for the applicant to complete accurately.
+- The GitHub repository and databases are separate from deployment. The original assessment's personal delivery report remains for the applicant to complete accurately.
 
 ## What I'd improve next
 
