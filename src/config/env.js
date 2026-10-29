@@ -14,6 +14,7 @@ const schema = z
       .refine((v) => /^postgres(ql)?:/.test(v)),
     JWT_SECRET: z.string().min(32),
     JWT_EXPIRES_IN: z.literal('1h').default('1h'),
+    OPENWEATHER_API_KEY: z.string().trim().min(1),
     CORS_ORIGINS: z
       .string()
       .min(1)

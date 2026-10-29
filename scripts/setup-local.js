@@ -9,6 +9,7 @@ LOCAL_POSTGRES_PASSWORD=${password}
 DATABASE_URL=postgresql://notesapi:${password}@127.0.0.1:5433/notesapi?schema=public
 JWT_SECRET=${randomBytes(32).toString('hex')}
 JWT_EXPIRES_IN=1h
+OPENWEATHER_API_KEY=your-openweathermap-key
 CORS_ORIGINS=http://localhost:3000
 LOCAL_REDIS_TOKEN=${redisToken}
 UPSTASH_REDIS_REST_URL=http://127.0.0.1:8079

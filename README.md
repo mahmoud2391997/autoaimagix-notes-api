@@ -1,6 +1,6 @@
 # Autoaimagix Notes API
 
-A small Express 4 REST API with JWT authentication, PostgreSQL notes, owner/admin authorization, and authenticated Open-Meteo access. Requires Node.js 20+.
+A small Express 4 REST API with JWT authentication, PostgreSQL notes, owner/admin authorization, and authenticated OpenWeatherMap access. Requires Node.js 20+.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ npm run test:local
 npm run dev
 ```
 
-`setup:local` creates `.env` with random database, JWT, and admin credentials and restrictive file permissions. It preserves existing values in `.env` and fills missing local Redis settings. Find the generated admin email/password in `.env`; never commit or share this file.
+`setup:local` creates `.env` with random database, JWT, and admin credentials and restrictive file permissions. It preserves existing values in `.env` and fills missing local Redis settings. Set `OPENWEATHER_API_KEY` to a real OpenWeatherMap key before using weather. Find the generated admin email/password in `.env`; never commit or share this file.
 
 PostgreSQL listens only on `127.0.0.1:5433`; the token-protected Redis REST bridge listens only on `127.0.0.1:8079`. Redis itself has no host port. Both databases persist data in named Docker volumes. The generated local Redis token is shared between `LOCAL_REDIS_TOKEN` for the bridge and `UPSTASH_REDIS_REST_TOKEN` for the API; keep them consistent. `npm run db:down` stops the database without deleting its data. If you already run native PostgreSQL, create an empty database and set `DATABASE_URL` in `.env` instead; Docker is optional in that case. Keep `LOCAL_POSTGRES_PASSWORD` consistent with the URL when using Compose. Changing it later does not reset the password in an existing volume.
 
@@ -53,6 +53,7 @@ The database smoke script runs real API requests against Prisma and PostgreSQL, 
 | DATABASE_URL_UNPOOLED    | Direct Neon URL used only by remote schema setup                |
 | LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API            |
 | LOCAL_REDIS_TOKEN        | Local Redis REST bridge token; must match the API Redis token   |
+| OPENWEATHER_API_KEY      | Required OpenWeatherMap API key; never commit it                |
 | JWT_SECRET               | Random secret of at least 32 characters                         |
 | JWT_EXPIRES_IN           | Must be `1h`                                                    |
 | CORS_ORIGINS             | Comma-separated exact HTTP(S) origins, without trailing slashes |
@@ -67,11 +68,11 @@ Admin seed variables are only necessary for the seed command. Do not keep them i
 
 Live API: [autoaimagix-notes-api.vercel.app](https://autoaimagix-notes-api.vercel.app/api/health). Production smoke tests passed for authentication, owner/admin note access, expired tokens, shared Redis rate limits, and live Cairo weather. Temporary test accounts were removed.
 
-The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Upstash Redis is provisioned on the free plan with paid auto-upgrades disabled. Vercel Marketplace injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`; environment validation accepts these as aliases for the corresponding `UPSTASH_REDIS_REST_*` settings. Weather uses the public Open-Meteo API and requires no API key.
+The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Upstash Redis is provisioned on the free plan with paid auto-upgrades disabled. Vercel Marketplace injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`; environment validation accepts these as aliases for the corresponding `UPSTASH_REDIS_REST_*` settings. Weather uses OpenWeatherMap and requires `OPENWEATHER_API_KEY` as a production Secret.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
 2. Create an Upstash Redis database and copy its REST URL/token.
-3. Weather uses Open-Meteo, so no weather API key is needed.
+3. Get an OpenWeatherMap API key and configure `OPENWEATHER_API_KEY`.
 4. Install the Vercel CLI and run `vercel link` from this directory. Choose the intended account and project. Use the Other framework preset, `npm run build`, and no static output directory.
 5. Add the runtime environment variables from the table in the Vercel dashboard for each intended environment. Set `NODE_ENV=production`, use a newly generated JWT secret, and configure the actual client CORS origins. Upstash is mandatory in production.
 6. In a trusted local shell, configure `.env` to point at the production database and provide the admin seed credentials. Run `npx prisma db push` and `npm run db:seed` **against that production database**. Do not paste secrets into command-line arguments or commit them.
@@ -132,7 +133,7 @@ Statuses: 400 validation/malformed JSON, 401 missing/invalid authentication or c
 - **Mass assignment:** strict Zod schemas reject unexpected fields. Registration's explicitly permitted `role` field is discarded before the service is called; all registrations persist `USER`. All other unknown fields, including `id` and `ownerId`, are rejected. The authenticated identity controls ownership.
 - **Login limiting:** five attempts per 15-minute fixed window per IP, including failed validation. Upstash shares state across serverless instances; production fails startup without it and fails closed on store failure/timeout. The default Docker development stack uses local Redis through an Upstash-compatible REST bridge. Unit tests and environments without Redis variables use express-rate-limit memory storage. HTTP Redis URLs are allowed only for loopback hosts outside production; production always requires HTTPS. Responses include `RateLimit-*`, and 429 includes `Retry-After`. Shared fixed windows are aligned to Upstash's clock, so bursts can straddle a window boundary.
 - **Proxy:** `trust proxy=1` assumes exactly one trusted reverse proxy, as requested for Vercel. Restrict direct access to a self-hosted backend and adjust proxy trust to its topology before using this setting elsewhere.
-- **Weather:** fixed HTTPS upstream, encoded city, five-second abort timeout, validated response and allowlisted output fields. Upstream errors never reach responses. City lookup and forecast share one five-second deadline. Weather data is provided by [Open-Meteo](https://open-meteo.com/) using its [geocoding](https://open-meteo.com/en/docs/geocoding-api) and [forecast APIs](https://open-meteo.com/en/docs). The public service is for non-commercial use; use a suitable commercial plan before commercial reuse.
+- **Weather:** OpenWeatherMap current weather over a fixed HTTPS endpoint, encoded city, five-second abort timeout, validated response, and allowlisted output fields. The API key is loaded from `OPENWEATHER_API_KEY`, validated at startup, and never returned. Upstream city-not-found becomes a sanitized 404; other upstream failures become a generic 502.
 - **HTTP:** Helmet, exact CORS allowlist, no-store responses, 10kb JSON limit, and central error serialization. CORS permits requests without an Origin header; authentication remains necessary. CORS is a browser policy, not access control.
 
 ## Verification
@@ -149,14 +150,14 @@ npm run format:check
 npm run test:local
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Open-Meteo connectivity was verified for Cairo. Production Vercel/Upstash smoke tests passed, including distributed login limiting and live weather.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. A live OpenWeatherMap request was verified for Cairo using the configured API key. Production Vercel/Upstash smoke tests passed, including distributed login limiting and live weather.
 
 The local stack smoke test starts two separate API processes, verifies shared PostgreSQL CRUD, alternates login attempts between them, confirms attempt six is rate limited with retry headers, verifies the counter exists in Redis, and checks bridge authentication. It removes its own test account and Redis keys. It refuses non-loopback database or Redis targets. This test passed against the local Docker stack. The local REST bridge follows the [Upstash-recommended development approach](https://upstash.com/docs/redis/sdks/ts/developing). Its image is pinned by digest. Newer rate-limit SDKs add an Upstash-specific Lua header; a local-only SDK middleware removes that flag and remaps script hashes for native Redis. Production HTTPS clients do not use this adapter.
 
 ## Assumptions
 
 - The pasted specification controls implementation; the attached assessment document is background, not an instruction to publish or fill in personal claims.
-- Open-Meteo replaces OpenWeatherMap at the user's request; the external weather endpoint remains authenticated, with the same output fields.
+- Weather uses OpenWeatherMap as originally specified; the external endpoint remains authenticated with unchanged output fields.
 - Registration ignores `role` as explicitly required, despite the general strict unknown-field rule.
 - Production must use Upstash; memory fallback is for local development/tests only.
 - Admins can update/delete any note. Existing roles are managed through the seed or trusted database administration.

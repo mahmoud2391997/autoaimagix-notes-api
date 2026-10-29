@@ -324,34 +324,18 @@ describe('weather and errors', () => {
   it('requires authentication and returns only sanitized weather', async () => {
     expect((await call('get', '/api/weather?city=Cairo')).status).toBe(401);
     const a = await account();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: [
-            {
-              name: 'Cairo',
-              country_code: 'EG',
-              latitude: 30.04,
-              longitude: 31.24,
-            },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          current: {
-            temperature_2m: 30,
-            apparent_temperature: 31,
-            relative_humidity_2m: 40,
-            weather_code: 0,
-            wind_speed_10m: 2,
-          },
-          secret: 'not-forwarded',
-        }),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        name: 'Cairo',
+        sys: { country: 'EG' },
+        main: { temp: 30, feels_like: 31, humidity: 40 },
+        weather: [{ description: 'clear' }],
+        wind: { speed: 2 },
+        key: process.env.OPENWEATHER_API_KEY,
+      }),
+    });
     vi.stubGlobal('fetch', fetchMock);
     const response = await call('get', '/api/weather?city=Cairo', a.token);
     expect(response.status).toBe(200);
@@ -381,7 +365,7 @@ describe('weather and errors', () => {
     ]) {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(upstream));
       const response = await call('get', '/api/weather?city=Cairo', a.token);
-      expect(response.status).toBe(upstream.ok ? 404 : 502);
+      expect(response.status).toBe(upstream.status === 404 ? 404 : 502);
       expect(JSON.stringify(response.body)).not.toContain(
         process.env.OPENWEATHER_API_KEY,
       );
@@ -394,29 +378,23 @@ describe('weather and errors', () => {
     expect(response.status).toBe(502);
     expect(response.body.error.message).toBe('Weather service unavailable');
   });
-  it('rejects invalid forecast payloads and uses the same timeout for both requests', async () => {
+  it('rejects malformed weather payloads without exposing upstream data', async () => {
     const a = await account();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: [
-            { name: 'Cairo', country_code: 'EG', latitude: 30, longitude: 31 },
-          ],
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ current: { temperature_2m: null } }),
-      });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        main: { temp: null },
+        secret: process.env.OPENWEATHER_API_KEY,
+      }),
+    });
     vi.stubGlobal('fetch', fetchMock);
-    expect((await call('get', '/api/weather?city=Cairo', a.token)).status).toBe(
-      502,
+    const response = await call('get', '/api/weather?city=Cairo', a.token);
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(response.body)).not.toContain(
+      process.env.OPENWEATHER_API_KEY,
     );
-    expect(fetchMock.mock.calls[0][1].signal).toBe(
-      fetchMock.mock.calls[1][1].signal,
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it('sanitizes unexpected errors and handles malformed JSON, body limits, CORS and health', async () => {
     expect((await call('get', '/api/health')).body).toEqual({ status: 'ok' });
