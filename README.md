@@ -45,40 +45,42 @@ The database smoke script runs real API requests against Prisma and PostgreSQL, 
 
 ## Environment variables
 
-| Variable                 | Meaning                                                         |
-| ------------------------ | --------------------------------------------------------------- |
-| NODE_ENV                 | development, test, or production                                |
-| PORT                     | Local port; default 3000                                        |
-| DATABASE_URL             | Local PostgreSQL URL or Neon pooled PostgreSQL URL with TLS     |
-| DATABASE_URL_UNPOOLED    | Direct Neon URL used only by remote schema setup                |
-| LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API            |
-| LOCAL_REDIS_TOKEN        | Local Redis REST bridge token; must match the API Redis token   |
-| OPENWEATHER_API_KEY      | Required OpenWeatherMap API key; never commit it                |
-| JWT_SECRET               | Random secret of at least 32 characters                         |
-| JWT_EXPIRES_IN           | Must be `1h`                                                    |
-| CORS_ORIGINS             | Comma-separated exact HTTP(S) origins, without trailing slashes |
-| UPSTASH_REDIS_REST_URL   | HTTPS Redis REST URL; required in production                    |
-| UPSTASH_REDIS_REST_TOKEN | Redis REST token; required with the URL                         |
-| ADMIN_EMAIL              | Admin seed email; normalized to lowercase                       |
-| ADMIN_PASSWORD           | Seed password, 8–72 UTF-8 bytes, upper/lowercase and a digit    |
+| Variable                 | Meaning                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| NODE_ENV                 | development, test, or production                                                      |
+| PORT                     | Local port; default 3000                                                              |
+| DATABASE_URL             | Local PostgreSQL URL or Neon pooled PostgreSQL URL with TLS                           |
+| DATABASE_URL_UNPOOLED    | Direct Neon URL used only by remote schema setup                                      |
+| LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API                                  |
+| LOCAL_REDIS_TOKEN        | Local Redis REST bridge token; must match the API Redis token                         |
+| OPENWEATHER_API_KEY      | Required OpenWeatherMap API key; never commit it                                      |
+| JWT_SECRET               | Random secret of at least 32 characters                                               |
+| JWT_EXPIRES_IN           | Must be `1h`                                                                          |
+| CORS_ORIGINS             | Comma-separated exact HTTP(S) origins, without trailing slashes                       |
+| UPSTASH_REDIS_REST_URL   | Redis REST URL; HTTPS in production, loopback HTTP allowed locally; KV alias accepted |
+| UPSTASH_REDIS_REST_TOKEN | Redis REST token; required with the URL, or use its KV alias                          |
+| KV_REST_API_URL          | Vercel Marketplace alias for UPSTASH_REDIS_REST_URL                                   |
+| KV_REST_API_TOKEN        | Vercel Marketplace alias for UPSTASH_REDIS_REST_TOKEN                                 |
+| ADMIN_EMAIL              | Admin seed email; normalized to lowercase                                             |
+| ADMIN_PASSWORD           | Seed password, 8–72 UTF-8 bytes, upper/lowercase and a digit                          |
 
 Admin seed variables are only necessary for the seed command. Do not keep them in the Vercel runtime after seeding unless needed. Re-running the seed resets the configured account password and promotes it to admin.
 
 ## Vercel deployment
 
-Live API: [autoaimagix-notes-api.vercel.app](https://autoaimagix-notes-api.vercel.app/api/health). Production smoke tests passed for authentication, owner/admin note access, expired tokens, shared Redis rate limits, and live Cairo weather. Temporary test accounts were removed.
+Live API: [autoaimagix-notes-api.vercel.app](https://autoaimagix-notes-api.vercel.app/api/health). Production smoke tests passed for authentication, owner/admin note access, shared Redis rate limits, and live Cairo weather. Expired-token rejection is also covered by the automated test suite. Temporary test accounts were removed.
 
 The `autoaimagix-notes-api` Vercel project is linked to the GitHub repository. Production uses the dedicated Neon database, a separate JWT secret, and Upstash Redis. Upstash Redis is provisioned on the free plan with paid auto-upgrades disabled. Vercel Marketplace injects `KV_REST_API_URL` and `KV_REST_API_TOKEN`; environment validation accepts these as aliases for the corresponding `UPSTASH_REDIS_REST_*` settings. Weather uses OpenWeatherMap and requires `OPENWEATHER_API_KEY` as a production Secret.
 
 1. Create the Neon database; use the **pooled** URL for `DATABASE_URL`.
 2. Create an Upstash Redis database and copy its REST URL/token.
 3. Get an OpenWeatherMap API key and configure `OPENWEATHER_API_KEY`.
-4. Install the Vercel CLI and run `vercel link` from this directory. Choose the intended account and project. Use the Other framework preset, `npm run build`, and no static output directory.
+4. Install the Vercel CLI and run `vercel link` from this directory. Choose the intended account and project. Use the Other framework preset, `npm run build`, and the `public` output directory specified in `vercel.json`. That directory contains no application source or credentials.
 5. Add the runtime environment variables from the table in the Vercel dashboard for each intended environment. Set `NODE_ENV=production`, use a newly generated JWT secret, and configure the actual client CORS origins. Upstash is mandatory in production.
-6. In a trusted local shell, configure `.env` to point at the production database and provide the admin seed credentials. Run `npx prisma db push` and `npm run db:seed` **against that production database**. Do not paste secrets into command-line arguments or commit them.
+6. In a trusted local shell, configure the ignored `.env.neon` with the pooled `DATABASE_URL`, direct `DATABASE_URL_UNPOOLED`, and admin seed credentials. Run `npm run db:push:neon` (which runs Prisma `db push` using the direct URL) and `npm run db:seed:neon` against the intended production database. Keep local `.env` pointed at local PostgreSQL. Do not paste secrets into command-line arguments or commit them.
 7. Run `vercel --prod` and verify `/api/health`, register/login, and an ownership rejection against the resulting deployment.
 
-The rewrite routes all paths to `/api`, whose entry exports the app. Prisma Client is generated at install/build time. Nothing is deployed automatically by this repository.
+The rewrite routes all paths to `/api`, whose entry exports the app. Prisma Client is generated at install/build time. The Vercel project is connected to GitHub; pushes can trigger deployments through that integration. The CLI command above also deploys directly.
 
 ## Endpoints
 
@@ -150,7 +152,7 @@ npm run format:check
 npm run test:local
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. A live OpenWeatherMap request was verified for Cairo using the configured API key. Production Vercel/Upstash smoke tests passed, including distributed login limiting and live weather.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. A live OpenWeatherMap request was verified for Cairo using the configured API key. Final delivery verification passed: production curl tests covered role escalation prevention, identical credential errors, owner-only lists, cross-user 404s, seeded-admin access to both owners, live Cairo weather and unknown-city 404, Redis login limiting, strict validation, and missing/garbage token rejection. Both throwaway users and their notes were removed. Login attempts in all checks share the same IP quota, so later rate-limit requests can be blocked before their sixth call; the sixth call was verified as 429 with Retry-After.
 
 The local stack smoke test starts two separate API processes, verifies shared PostgreSQL CRUD, alternates login attempts between them, confirms attempt six is rate limited with retry headers, verifies the counter exists in Redis, and checks bridge authentication. It removes its own test account and Redis keys. It refuses non-loopback database or Redis targets. This test passed against the local Docker stack. The local REST bridge follows the [Upstash-recommended development approach](https://upstash.com/docs/redis/sdks/ts/developing). Its image is pinned by digest. Newer rate-limit SDKs add an Upstash-specific Lua header; a local-only SDK middleware removes that flag and remaps script hashes for native Redis. Production HTTPS clients do not use this adapter.
 
