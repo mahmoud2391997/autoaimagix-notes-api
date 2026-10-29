@@ -21,8 +21,9 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "test:db": "node scripts/smoke-db.js",
-    "db:push:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config node_modules/prisma/build/index.js db push",
-    "test:db:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config scripts/smoke-db.js"
+    "db:push:neon": "node scripts/push-neon.js",
+    "test:db:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config scripts/smoke-db.js",
+    "db:seed:neon": "DOTENV_CONFIG_PATH=.env.neon node -r dotenv/config prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

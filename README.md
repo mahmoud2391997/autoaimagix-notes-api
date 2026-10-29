@@ -28,14 +28,17 @@ The API listens on port 3000 by default. Health checks do not verify database co
 
 ## Remote Neon database
 
-The dedicated `autoaimagix-notes-api` Neon resource has been provisioned on the free plan in Frankfurt. Completing Neon account email verification is required to retrieve its connection settings through the console. The schema and remote smoke test have not yet been run.
+The dedicated `autoaimagix-notes-api` Neon resource has been provisioned on the free plan in Frankfurt. Account verification is complete. The Prisma schema and admin seed have been applied, and the database-backed API smoke test passes against this remote database.
 
-Use a separate ignored `.env.neon` file for remote operations. Copy `.env.example` into it, replace `DATABASE_URL` with Neon's **pooled** URL with `sslmode=require`, and generate independent JWT/admin secrets. Local Docker credentials do not belong in Neon or Vercel. Keep `NODE_ENV=development` in this administrative smoke-test file unless you also configure Upstash; the deployed API requires `NODE_ENV=production`.
+Use a separate ignored `.env.neon` file for remote operations. Copy `.env.example` into it, replace `DATABASE_URL` with Neon's **pooled** URL with `sslmode=require`, add `DATABASE_URL_UNPOOLED` with its **direct** URL, and generate independent JWT/admin secrets. Local Docker credentials do not belong in Neon or Vercel. Keep `NODE_ENV=development` in this administrative smoke-test file unless you also configure Upstash; the deployed API requires `NODE_ENV=production`.
 
 ```sh
 npm run db:push:neon
+npm run db:seed:neon
 npm run test:db:neon
 ```
+
+`db:push:neon` requires the direct URL and passes it only to the Prisma schema command; the API and smoke test use the pooled URL. `.env.neon` has independent JWT/admin credentials and never changes the local `.env`.
 
 The database smoke script runs real API requests against Prisma and PostgreSQL, checks authentication and owner/admin CRUD, and removes only the temporary accounts it creates (with cascading note deletion). Run it against the dedicated assessment database, not a database with unrelated production workloads.
 
@@ -46,6 +49,7 @@ The database smoke script runs real API requests against Prisma and PostgreSQL, 
 | NODE_ENV                 | development, test, or production                                |
 | PORT                     | Local port; default 3000                                        |
 | DATABASE_URL             | Local PostgreSQL URL or Neon pooled PostgreSQL URL with TLS     |
+| DATABASE_URL_UNPOOLED    | Direct Neon URL used only by remote schema setup                |
 | LOCAL_POSTGRES_PASSWORD  | Local Docker PostgreSQL password; ignored by the API            |
 | JWT_SECRET               | Random secret of at least 32 characters                         |
 | JWT_EXPIRES_IN           | Must be `1h`                                                    |
@@ -141,7 +145,7 @@ npm run build
 npm run format:check
 ```
 
-Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17. Live Vercel/Upstash and weather connectivity still require configured services and deployment smoke tests.
+Tests use Supertest against the actual Express middleware/routes/services with a mocked Prisma storage boundary and mocked weather fetch. They cover auth, bcrypt, JWT rejection, role reload, ownership query predicates, owner/admin CRUD, validation, rate-limit headers, sanitized errors, weather failures and CORS. They require no real credentials. The unit suite does not prove live service connectivity. `npm run test:db` additionally passed against local PostgreSQL 17, and `npm run test:db:neon` passed against the remote Neon database. Live Vercel/Upstash and weather connectivity still require configured services and deployment smoke tests.
 
 ## Assumptions
 
